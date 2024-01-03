@@ -1,0 +1,126 @@
+version: "3.9"
+
+##################################################
+# Services
+##################################################
+services:
+
+  postgresql:
+    image: ${DOCKERHUB_REGISTRY}postgres:${VERSION_TAG_POSTGRESQL}
+    container_name: authentik_postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+
+  redis:
+    image: ${DOCKERHUB_REGISTRY}redis:${VERSION_TAG_REDIS}
+    container_name: authentik_redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - redis:/data
+
+  authentik_server:
+    image: ${GHCR_REGISTRY}goauthentik/server:${VERSION_TAG_AUTHENTIK}
+    container_name: authentik_server
+    restart: unless-stopped
+    command: server
+    volumes:
+      - ./media:/media:ro
+      - ./custom-templates:/templates:ro
+    env_file:
+      - .env
+    ports:
+      - 8080:9000
+      - 8443:9443
+    depends_on:
+      - postgresql
+
+  authentik_worker:
+    image: ${GHCR_REGISTRY}goauthentik/server:${VERSION_TAG_AUTHENTIK}
+    container_name: authentik_worker
+    restart: unless-stopped
+    command: worker
+    volumes:
+      - ./media:/media:ro
+      - ./custom-templates:/templates:ro
+      - ./certs:/certs:ro
+    env_file:
+      - .env
+    depends_on:
+      - postgresql
+      - redis
+
+  authentik_worker2:
+    image: ${GHCR_REGISTRY}goauthentik/server:${VERSION_TAG_AUTHENTIK}
+    container_name: authentik_worker2
+    restart: unless-stopped
+    command: worker
+    volumes:
+      - ./media:/media:ro
+      - ./custom-templates:/templates:ro
+      - ./certs:/certs:ro
+    env_file:
+      - .env
+    depends_on:
+      - postgresql
+      - redis
+
+  authentik_flower:
+    image: ${GHCR_REGISTRY}goauthentik/server:${VERSION_TAG_AUTHENTIK}
+    container_name: authentik_flower
+    restart: unless-stopped
+    command: worker-status
+    volumes:
+      - ./media:/media:ro
+      - ./custom-templates:/templates:ro
+      - ./certs:/certs:ro
+    env_file:
+      - .env
+    ports:
+      - 9000:9000
+    depends_on:
+      - postgresql
+      - redis
+
+  authentik_ldap:
+    image: ${GHCR_REGISTRY}goauthentik/ldap:${VERSION_TAG_AUTHENTIK}
+    container_name: authentik_ldap
+    restart: unless-stopped
+    ports:
+      - 389:3389
+      - 636:6636
+    environment:
+      AUTHENTIK_HOST: http://authentik_server:8080
+      AUTHENTIK_INSECURE: "true"
+      AUTHENTIK_TOKEN: QvvTAtMhl0zWlu696bx2IB3VCRR1vxQ7gNB0fiuidLGboOldjlMl31AUTkWC
+
+# rs4myLwktCxae6WSU7bcRIAY5Q7dHC2x0yiMp7njo3Q9oYXUVQlhYxWi3hwE
+# rs4myLwktCxae6WSU7bcRIAY5Q7dHC2x0yiMp7njo3Q9oYXUVQlhYxWi3hwE
+
+
+##################################################
+# Volumes
+##################################################
+volumes:
+  postgres:
+    driver: local
+    name: authentik_postgres_data
+  redis:
+    driver: local
+    name: authentik_redis_data
